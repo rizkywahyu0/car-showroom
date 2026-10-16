@@ -3,6 +3,8 @@ import "./globals.css";
 import Navbar from "./components/Navbar";
 
 
+import { AuthProvider } from "./context/AuthContext";
+
 export const metadata: Metadata = {
   title: "SHIFT_TECH MOD V1.0 | Precision Engineering Redefined",
   description:
@@ -20,9 +22,10 @@ export default function RootLayout({
       className={`h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Navbar />
-        {children}
-
+        <AuthProvider>
+          <Navbar />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

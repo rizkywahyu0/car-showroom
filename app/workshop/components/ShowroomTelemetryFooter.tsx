@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { SlidersHorizontal, RefreshCw, Gauge } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { InventoryItem } from "@/app/inventory/data/wheels";
 
 interface ShowroomTelemetryFooterProps {

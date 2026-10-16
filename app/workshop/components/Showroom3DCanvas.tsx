@@ -8,18 +8,10 @@ import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { ColorPicker } from "antd";
 import {
   Rotate3d,
-  Camera,
-  Sun,
-  Maximize2,
-  Sparkles,
-  Layers,
   Palette,
-  Eye,
-  Check,
   Car,
-  Pipette,
-  Sliders,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { InventoryItem } from "@/app/inventory/data/wheels";
 import { buildEnkeiRPF1Mesh } from "@/app/workshop/utils/enkeiRPF1Builder";
@@ -45,11 +37,14 @@ export interface CarModelPreset {
   id: "porsche-gt3rs" | "bmw-m3-g81" | "toyota-supra-a91";
   name: string;
   brand: string;
+  modelFile: string;
   power: string;
   torque: string;
   weight: string;
   drag: string;
   downforce: string;
+  wheelBaseWidth?: number;
+  wheelBaseLength?: number;
 }
 
 export const CAR_MODELS: CarModelPreset[] = [
@@ -57,31 +52,40 @@ export const CAR_MODELS: CarModelPreset[] = [
     id: "porsche-gt3rs",
     name: "Porsche 911 GT3 RS",
     brand: "PORSCHE MOTORSPORT",
+    modelFile: "/911gt3rs.glb",
     power: "642 HP",
     torque: "590 LB-FT",
     weight: "3,120 LBS",
     drag: "0.31 CD",
     downforce: "+860 kg @ 285 km/h",
+    wheelBaseWidth: 1.86,
+    wheelBaseLength: 2.55,
   },
   {
     id: "bmw-m3-g81",
-    name: "BMW M3 Touring G81",
+    name: "BMW M4 Competition",
     brand: "BMW M POWER",
+    modelFile: "/m4.glb",
     power: "530 HP",
     torque: "650 NM",
     weight: "3,750 LBS",
     drag: "0.33 CD",
     downforce: "+320 kg @ 250 km/h",
+    wheelBaseWidth: 1.88,
+    wheelBaseLength: 2.75,
   },
   {
     id: "toyota-supra-a91",
-    name: "Toyota GR Supra A91",
+    name: "Toyota GR86 Gazoo",
     brand: "GAZOO RACING",
+    modelFile: "/gr86.glb",
     power: "382 HP",
     torque: "500 NM",
     weight: "3,395 LBS",
     drag: "0.29 CD",
     downforce: "+280 kg @ 240 km/h",
+    wheelBaseWidth: 1.82,
+    wheelBaseLength: 2.50,
   },
 ];
 
@@ -95,38 +99,46 @@ interface Showroom3DCanvasProps {
   customModelFile?: { file: File; type: "glb" | "gltf" | "fbx"; scale: number } | null;
   selectedCarModelId: "porsche-gt3rs" | "bmw-m3-g81" | "toyota-supra-a91";
   onSelectCarModel: (id: "porsche-gt3rs" | "bmw-m3-g81" | "toyota-supra-a91") => void;
+  currentPaintColor?: PaintOption;
+  onPaintColorChange?: (color: PaintOption) => void;
 }
 
 export default function Showroom3DCanvas({
   equippedVelg,
   equippedTyre,
-  equippedSpoiler,
-  equippedHood,
-  equippedBodykit,
   equippedBrake,
   customModelFile,
   selectedCarModelId,
   onSelectCarModel,
+  currentPaintColor,
+  onPaintColorChange,
 }: Showroom3DCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [paintColor, setPaintColor] = useState<PaintOption>(PAINT_COLORS[0]);
+  const [internalPaintColor, setInternalPaintColor] = useState<PaintOption>(PAINT_COLORS[0]);
+  const paintColor = currentPaintColor || internalPaintColor;
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
   const [activeCamPreset, setActiveCamPreset] = useState<string>("3/4 Front");
+  const [isLoadingModel, setIsLoadingModel] = useState<boolean>(false);
+  const [loadProgress, setLoadProgress] = useState<number>(0);
 
   const handleHexChange = (newHex: string) => {
-    setPaintColor((prev) => ({
-      ...prev,
+    const nextColor = {
+      ...paintColor,
       name: "Custom Color",
       hex: newHex,
-    }));
+    };
+    setInternalPaintColor(nextColor);
+    onPaintColorChange?.(nextColor);
   };
 
   const handleFinishChange = (newFinish: "Gloss" | "Matte" | "Metallic" | "Carbon") => {
-    setPaintColor((prev) => ({
-      ...prev,
+    const nextColor = {
+      ...paintColor,
       finish: newFinish,
-    }));
+    };
+    setInternalPaintColor(nextColor);
+    onPaintColorChange?.(nextColor);
   };
 
   const currentCarData =
@@ -146,9 +158,10 @@ export default function Showroom3DCanvas({
     hoodGroup: THREE.Group;
     caliperGroup: THREE.Group;
     customModelGroup: THREE.Group;
+    glbModelGroup: THREE.Group;
   } | null>(null);
 
-  // Initialize Three.js Scene
+  // Initialize Three.js Scene & Showroom Environment
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -158,8 +171,8 @@ export default function Showroom3DCanvas({
 
     // 1. Scene & Camera
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x06070a);
-    scene.fog = new THREE.FogExp2(0x06070a, 0.04);
+    scene.background = new THREE.Color(0x05060a);
+    scene.fog = new THREE.FogExp2(0x05060a, 0.035);
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
     camera.position.set(4.8, 2.2, 5.2);
@@ -171,7 +184,7 @@ export default function Showroom3DCanvas({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
+    renderer.toneMappingExposure = 1.35;
 
     container.replaceChildren(renderer.domElement);
 
@@ -184,52 +197,134 @@ export default function Showroom3DCanvas({
     controls.maxDistance = 14;
     controls.target.set(0, 0.6, 0);
 
-    // 4. Lighting & Stage Setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    // 4. ================= SHOWROOM STUDIO LIGHTING & STAGE =================
+    // Ambient Light
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.3);
     scene.add(ambientLight);
 
-    const mainLight = new THREE.DirectionalLight(0xffffff, 2.8);
-    mainLight.position.set(5, 8, 5);
+    // Key Studio Light
+    const mainLight = new THREE.DirectionalLight(0xffffff, 3.0);
+    mainLight.position.set(6, 9, 6);
     mainLight.castShadow = true;
     mainLight.shadow.mapSize.width = 2048;
     mainLight.shadow.mapSize.height = 2048;
     mainLight.shadow.bias = -0.0001;
     scene.add(mainLight);
 
-    const rimLight1 = new THREE.PointLight(0x9cbbf8, 3.5, 15);
-    rimLight1.position.set(-6, 3, -4);
+    // Rim Studio Spotlights
+    const rimLight1 = new THREE.PointLight(0x9cbbf8, 3.8, 16);
+    rimLight1.position.set(-6, 3.5, -4);
     scene.add(rimLight1);
 
-    const rimLight2 = new THREE.PointLight(0x00e5ff, 2.5, 12);
-    rimLight2.position.set(5, 2, -5);
+    const rimLight2 = new THREE.PointLight(0x00e5ff, 2.8, 14);
+    rimLight2.position.set(5, 2.5, -5);
     scene.add(rimLight2);
 
-    // Floor Shadow Plane
-    const floorGeo = new THREE.PlaneGeometry(30, 30);
+    const frontFillLight = new THREE.DirectionalLight(0xbdd5f8, 1.4);
+    frontFillLight.position.set(-4, 3, 5);
+    scene.add(frontFillLight);
+
+    // ================= SHOWROOM ARCHITECTURE & ENVIRONMENT =================
+    // 1. Polished Epoxy Showroom Floor
+    const floorGeo = new THREE.PlaneGeometry(60, 60);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x090b10,
-      roughness: 0.4,
-      metalness: 0.6,
+      color: 0x07090e,
+      roughness: 0.25,
+      metalness: 0.7,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Iconic Circular Neon Halo Stage Light
-    const haloGeo = new THREE.TorusGeometry(3.6, 0.04, 16, 64);
-    const haloMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const haloMesh = new THREE.Mesh(haloGeo, haloMat);
-    haloMesh.rotation.x = Math.PI / 2;
-    haloMesh.position.y = 0.02;
-    scene.add(haloMesh);
+    // 2. Multi-tier Showroom Turntable Stage (Podium)
+    const stagePlatformGeo = new THREE.CylinderGeometry(3.9, 4.0, 0.08, 64);
+    const stageMat = new THREE.MeshStandardMaterial({
+      color: 0x0e1118,
+      roughness: 0.3,
+      metalness: 0.85,
+    });
+    const stagePlatform = new THREE.Mesh(stagePlatformGeo, stageMat);
+    stagePlatform.position.y = 0.04;
+    stagePlatform.receiveShadow = true;
+    scene.add(stagePlatform);
 
-    const haloInnerGeo = new THREE.TorusGeometry(3.55, 0.02, 16, 64);
-    const haloInnerMat = new THREE.MeshBasicMaterial({ color: 0x9cbbf8 });
+    // Stage Chrome Bevel Rim
+    const stageRimGeo = new THREE.TorusGeometry(3.95, 0.02, 16, 64);
+    const stageRimMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.95, roughness: 0.15 });
+    const stageRim = new THREE.Mesh(stageRimGeo, stageRimMat);
+    stageRim.rotation.x = Math.PI / 2;
+    stageRim.position.y = 0.08;
+    scene.add(stageRim);
+
+    // Circular Neon Halo Stage Rings
+    const haloOuterGeo = new THREE.TorusGeometry(3.8, 0.03, 16, 64);
+    const haloOuterMat = new THREE.MeshBasicMaterial({ color: 0x9cbbf8 });
+    const haloOuter = new THREE.Mesh(haloOuterGeo, haloOuterMat);
+    haloOuter.rotation.x = Math.PI / 2;
+    haloOuter.position.y = 0.082;
+    scene.add(haloOuter);
+
+    const haloInnerGeo = new THREE.TorusGeometry(3.2, 0.02, 16, 64);
+    const haloInnerMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
     const haloInner = new THREE.Mesh(haloInnerGeo, haloInnerMat);
     haloInner.rotation.x = Math.PI / 2;
-    haloInner.position.y = 0.025;
+    haloInner.position.y = 0.083;
     scene.add(haloInner);
+
+    // 3. Curved Studio Cyc Wall Backdrop
+    const cycGeo = new THREE.CylinderGeometry(14, 14, 8, 48, 1, true, -Math.PI * 0.75, Math.PI * 1.5);
+    const cycMat = new THREE.MeshStandardMaterial({
+      color: 0x080a10,
+      roughness: 0.8,
+      metalness: 0.2,
+      side: THREE.BackSide,
+    });
+    const cycWall = new THREE.Mesh(cycGeo, cycMat);
+    cycWall.position.set(0, 4, 0);
+    scene.add(cycWall);
+
+    // Horizontal Neon Strip on Back Wall
+    const cycStripGeo = new THREE.TorusGeometry(13.9, 0.03, 12, 48, Math.PI * 1.2);
+    const cycStripMat = new THREE.MeshBasicMaterial({ color: 0x1e3a8a });
+    const cycStrip = new THREE.Mesh(cycStripGeo, cycStripMat);
+    cycStrip.rotation.x = Math.PI / 2;
+    cycStrip.rotation.z = Math.PI * 0.4;
+    cycStrip.position.set(0, 1.8, 0);
+    scene.add(cycStrip);
+
+    // 4. Showroom Architectural Columns (4 Pillars)
+    const pillarPositions = [
+      { x: -7, z: -6 },
+      { x: 7, z: -6 },
+      { x: -8, z: 4 },
+      { x: 8, z: 4 },
+    ];
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x0b0d14, roughness: 0.5, metalness: 0.6 });
+    const pillarNeonMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+
+    pillarPositions.forEach((pos) => {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7, 0.5), pillarMat);
+      pillar.position.set(pos.x, 3.5, pos.z);
+      scene.add(pillar);
+
+      const neon = new THREE.Mesh(new THREE.BoxGeometry(0.06, 6.5, 0.06), pillarNeonMat);
+      neon.position.set(pos.x + 0.26, 3.5, pos.z);
+      scene.add(neon);
+    });
+
+    // 5. Suspended Overhead Studio Softbox Light Gantry
+    const softboxGeo = new THREE.BoxGeometry(5.5, 0.1, 4.0);
+    const softboxMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const softbox = new THREE.Mesh(softboxGeo, softboxMat);
+    softbox.position.set(0, 5.2, 0);
+    scene.add(softbox);
+
+    const gantryFrameGeo = new THREE.BoxGeometry(5.8, 0.15, 4.3);
+    const gantryMat = new THREE.MeshStandardMaterial({ color: 0x1f2430, metalness: 0.9, roughness: 0.2 });
+    const gantry = new THREE.Mesh(gantryFrameGeo, gantryMat);
+    gantry.position.set(0, 5.25, 0);
+    scene.add(gantry);
 
     // 5. Car Root Group
     const carGroup = new THREE.Group();
@@ -253,9 +348,12 @@ export default function Showroom3DCanvas({
     const customModelGroup = new THREE.Group();
     carGroup.add(customModelGroup);
 
+    const glbModelGroup = new THREE.Group();
+    carGroup.add(glbModelGroup);
+
     // Paint Shader Material
     const carBodyMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(paintColor.hex),
+      color: new THREE.Color(0x0f1115),
       metalness: 0.3,
       roughness: 0.15,
       clearcoat: 1.0,
@@ -275,6 +373,7 @@ export default function Showroom3DCanvas({
       hoodGroup,
       caliperGroup,
       customModelGroup,
+      glbModelGroup,
     };
 
     // Animation Loop
@@ -301,7 +400,27 @@ export default function Showroom3DCanvas({
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", handleResize);
+      controls.dispose();
+
+      scene.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          mesh.geometry?.dispose();
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => {
+              if ("map" in m && m.map) (m.map as THREE.Texture).dispose();
+              m.dispose();
+            });
+          } else if (mesh.material) {
+            const m = mesh.material;
+            if ("map" in m && m.map) (m.map as THREE.Texture).dispose();
+            m.dispose();
+          }
+        }
+      });
+
       renderer.dispose();
+      threeRef.current = null;
     };
   }, []);
 
@@ -342,52 +461,241 @@ export default function Showroom3DCanvas({
     threeRef.current.controls.autoRotateSpeed = 1.5;
   }, [isRotating]);
 
-  // Build Procedural 3D Car Body (3 Models Available)
+  // ================= LOAD GLB 3D CAR MODEL FROM /public =================
   useEffect(() => {
     if (!threeRef.current) return;
-    const {
-      bodyMeshGroup,
-      wheelsGroup,
-      spoilerGroup,
-      hoodGroup,
-      caliperGroup,
-      carBodyMaterial,
-    } = threeRef.current;
+    const { glbModelGroup, bodyMeshGroup, wheelsGroup, carBodyMaterial } = threeRef.current;
 
-    // Clear old meshes
+    glbModelGroup.clear();
     bodyMeshGroup.clear();
     wheelsGroup.clear();
-    spoilerGroup.clear();
-    hoodGroup.clear();
-    caliperGroup.clear();
 
-    if (customModelFile) return; // If custom uploaded model is active
+    if (customModelFile) return; // Custom user imported model takes precedence
 
-    const carbonMat = new THREE.MeshStandardMaterial({
-      color: 0x15171e,
-      roughness: 0.3,
-      metalness: 0.4,
+    const preset = CAR_MODELS.find((c) => c.id === selectedCarModelId) || CAR_MODELS[0];
+    const glbPath = preset.modelFile;
+
+    queueMicrotask(() => {
+      setIsLoadingModel(true);
+      setLoadProgress(0);
     });
-    const glassMat = new THREE.MeshPhysicalMaterial({
-      color: 0x0a0c10,
-      transparent: true,
-      opacity: 0.85,
-      roughness: 0.05,
-      metalness: 0.9,
-    });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x0f1115, roughness: 0.8 });
-    const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.9, roughness: 0.1 });
 
-    // ================= MODEL 1: PORSCHE 911 GT3 RS =================
-    if (selectedCarModelId === "porsche-gt3rs") {
-      // Lower Main Body
+    const gltfLoader = new GLTFLoader();
+
+    gltfLoader.load(
+      glbPath,
+      (gltf) => {
+        const model = gltf.scene;
+
+        // Calculate Bounding Box to normalize scale and ground position
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+
+        // Center on X and Z, and place cleanly on turntable stage (y = 0.08)
+        model.position.x -= center.x;
+        model.position.y -= box.min.y;
+        model.position.z -= center.z;
+
+        // Normalize scale to standard showroom length (~4.2 units length)
+        const maxDimension = Math.max(size.x, size.y, size.z);
+        const targetScale = maxDimension > 0 ? 4.2 / maxDimension : 0.01;
+        model.scale.set(targetScale, targetScale, targetScale);
+
+        // Traverse Model Hierarchy
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            const meshName = mesh.name.toLowerCase();
+
+            // Hide or skip stock wheels if user wants custom modular wheels
+            if (
+              meshName.includes("wheel") ||
+              meshName.includes("tire") ||
+              meshName.includes("rim") ||
+              meshName.includes("roda")
+            ) {
+              // Stock wheels are kept unless replaced
+            }
+
+            // Assign Dynamic Paint Material to Body Parts
+            if (
+              meshName.includes("body") ||
+              meshName.includes("paint") ||
+              meshName.includes("chassis") ||
+              meshName.includes("hood") ||
+              meshName.includes("door") ||
+              meshName.includes("bumper") ||
+              meshName.includes("fender") ||
+              meshName.includes("trunk") ||
+              meshName.includes("car") ||
+              meshName === "object001" ||
+              meshName.includes("exterior")
+            ) {
+              mesh.material = carBodyMaterial;
+            } else if (
+              meshName.includes("glass") ||
+              meshName.includes("windshield") ||
+              meshName.includes("window")
+            ) {
+              // Tinted Glass Material
+              mesh.material = new THREE.MeshPhysicalMaterial({
+                color: 0x0a0c10,
+                transparent: true,
+                opacity: 0.85,
+                roughness: 0.05,
+                metalness: 0.9,
+              });
+            } else if (
+              meshName.includes("light") ||
+              meshName.includes("headlight") ||
+              meshName.includes("lamp")
+            ) {
+              mesh.material = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+            } else if (meshName.includes("carbon")) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x15171e,
+                roughness: 0.3,
+                metalness: 0.4,
+              });
+            }
+          }
+        });
+
+        glbModelGroup.add(model);
+        setIsLoadingModel(false);
+
+        // Build 4 Modular Wheels on the GLB vehicle arches
+        buildVehicleWheels();
+      },
+      (xhr) => {
+        if (xhr.total > 0) {
+          const percent = Math.round((xhr.loaded / xhr.total) * 100);
+          setLoadProgress(percent);
+        }
+      },
+      (error) => {
+        console.warn("GLB load failed, using procedural car representation:", error);
+        setIsLoadingModel(false);
+        // Fallback procedural car body
+        buildProceduralFallback();
+        buildVehicleWheels();
+      }
+    );
+
+    // Function to build the 4 modular wheels (supporting Enkei RPF1)
+    const buildVehicleWheels = () => {
+      const wbWidth = preset.wheelBaseWidth || 1.86;
+      const wbLength = preset.wheelBaseLength || 2.6;
+
+      const wheelPositions = [
+        { x: -wbWidth / 2, y: 0.38, z: wbLength / 2, isLeft: true },
+        { x: wbWidth / 2, y: 0.38, z: wbLength / 2, isLeft: false },
+        { x: -wbWidth / 2, y: 0.4, z: -wbLength / 2, isLeft: true },
+        { x: wbWidth / 2, y: 0.4, z: -wbLength / 2, isLeft: false },
+      ];
+
+      const rimColor = new THREE.Color(equippedVelg.colorTheme.primary);
+      const rimMat = new THREE.MeshStandardMaterial({
+        color: rimColor,
+        metalness: 0.92,
+        roughness: 0.2,
+      });
+      const tireMat = new THREE.MeshStandardMaterial({
+        color: 0x16171a,
+        roughness: 0.85,
+        metalness: 0.1,
+      });
+      const rotorMat = new THREE.MeshStandardMaterial({
+        color: 0x6b7280,
+        metalness: 0.95,
+        roughness: 0.2,
+      });
+
+      const caliperColorHex = equippedBrake.colorTheme.primary || "#eab308";
+      const caliperMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(caliperColorHex),
+        metalness: 0.6,
+        roughness: 0.3,
+      });
+
+      wheelPositions.forEach((pos) => {
+        const wheelSub = new THREE.Group();
+        wheelSub.position.set(pos.x, pos.y, pos.z);
+
+        // Tire Torus
+        const tireTorus = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.12, 20, 36), tireMat);
+        tireTorus.rotation.y = Math.PI / 2;
+        tireTorus.castShadow = true;
+        wheelSub.add(tireTorus);
+
+        if (equippedVelg.id === "enkei-rpf1") {
+          // High-detail procedural Enkei RPF1 Model
+          const rpf1Mesh = buildEnkeiRPF1Mesh({
+            scale: 0.28,
+            color: equippedVelg.colorTheme.primary || 0xdbe2ea,
+            secondaryColor: equippedVelg.colorTheme.secondary,
+            widthDepth: 0.38,
+          });
+          rpf1Mesh.rotation.y = pos.isLeft ? -Math.PI / 2 : Math.PI / 2;
+          wheelSub.add(rpf1Mesh);
+        } else {
+          // Generic Rim
+          const rimBarrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.34, 0.34, 0.24, 32, 1, true),
+            rimMat
+          );
+          rimBarrel.rotation.z = Math.PI / 2;
+          wheelSub.add(rimBarrel);
+
+          const rimHub = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.25, 24), rimMat);
+          rimHub.rotation.z = Math.PI / 2;
+          wheelSub.add(rimHub);
+
+          const spokeCount =
+            equippedVelg.id === "volk-te37"
+              ? 6
+              : equippedVelg.id === "bbs-lm-r"
+                ? 16
+                : 10;
+
+          for (let s = 0; s < spokeCount; s++) {
+            const ang = (s * Math.PI * 2) / spokeCount;
+            const spokeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.02), rimMat);
+            spokeMesh.position.set(
+              0.06 * (pos.isLeft ? -1 : 1),
+              Math.sin(ang) * 0.2,
+              Math.cos(ang) * 0.2
+            );
+            spokeMesh.rotation.x = ang;
+            wheelSub.add(spokeMesh);
+          }
+        }
+
+        // Brake Rotor & Caliper
+        const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 28), rotorMat);
+        rotor.rotation.z = Math.PI / 2;
+        wheelSub.add(rotor);
+
+        const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.08), caliperMat);
+        caliper.position.set(0, 0.16, 0.05);
+        wheelSub.add(caliper);
+
+        wheelsGroup.add(wheelSub);
+      });
+    };
+
+    // Procedural Car Body Fallback
+    const buildProceduralFallback = () => {
       const lowerGeo = new THREE.BoxGeometry(1.82, 0.45, 4.3);
       const lower = new THREE.Mesh(lowerGeo, carBodyMaterial);
       lower.position.set(0, 0.48, 0);
       lower.castShadow = true;
       bodyMeshGroup.add(lower);
 
-      // Curved GT3 Front Nose
       const noseGeo = new THREE.BoxGeometry(1.78, 0.34, 1.4);
       const nose = new THREE.Mesh(noseGeo, carBodyMaterial);
       nose.position.set(0, 0.45, 1.7);
@@ -395,325 +703,26 @@ export default function Showroom3DCanvas({
       nose.castShadow = true;
       bodyMeshGroup.add(nose);
 
-      // Teardrop Fastback Cabin
       const cabinGeo = new THREE.BoxGeometry(1.38, 0.52, 2.0);
       const cabin = new THREE.Mesh(cabinGeo, carBodyMaterial);
       cabin.position.set(0, 0.85, -0.2);
       cabin.castShadow = true;
       bodyMeshGroup.add(cabin);
-
-      // Windshield & Rear Sloped Glass
-      const wsGeo = new THREE.BoxGeometry(1.34, 0.48, 0.8);
-      const ws = new THREE.Mesh(wsGeo, glassMat);
-      ws.position.set(0, 0.82, 0.6);
-      ws.rotation.x = -0.45;
-      bodyMeshGroup.add(ws);
-
-      const rgGeo = new THREE.BoxGeometry(1.34, 0.46, 1.0);
-      const rg = new THREE.Mesh(rgGeo, glassMat);
-      rg.position.set(0, 0.78, -1.0);
-      rg.rotation.x = 0.48;
-      bodyMeshGroup.add(rg);
-
-      // 4-Point Oval LED Headlamps
-      const hlMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
-      const hlLeft = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16), hlMat);
-      hlLeft.position.set(-0.65, 0.54, 2.35);
-      hlLeft.rotation.x = Math.PI / 2;
-      bodyMeshGroup.add(hlLeft);
-
-      const hlRight = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16), hlMat);
-      hlRight.position.set(0.65, 0.54, 2.35);
-      hlRight.rotation.x = Math.PI / 2;
-      bodyMeshGroup.add(hlRight);
-
-      // 992 LED Lightbar Taillight
-      const tlMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-      const tl = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.06, 0.08), tlMat);
-      tl.position.set(0, 0.58, -2.15);
-      bodyMeshGroup.add(tl);
-
-      // GT3 RS Side Decal Stripe
-      const decalMat = new THREE.MeshBasicMaterial({ color: 0xd91e1e });
-      const dLeft = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.14, 2.2), decalMat);
-      dLeft.position.set(-0.92, 0.42, -0.1);
-      bodyMeshGroup.add(dLeft);
-
-      const dRight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.14, 2.2), decalMat);
-      dRight.position.set(0.92, 0.42, -0.1);
-      bodyMeshGroup.add(dRight);
-
-      // Splitter & Diffuser
-      const spl = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.05, 0.45), carbonMat);
-      spl.position.set(0, 0.22, 2.25);
-      bodyMeshGroup.add(spl);
-
-      const diff = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.14, 0.5), carbonMat);
-      diff.position.set(0, 0.26, -2.15);
-      bodyMeshGroup.add(diff);
-    }
-
-    // ================= MODEL 2: BMW M3 TOURING (G81) =================
-    else if (selectedCarModelId === "bmw-m3-g81") {
-      // Boxy Muscular Touring Body
-      const lowerGeo = new THREE.BoxGeometry(1.85, 0.5, 4.4);
-      const lower = new THREE.Mesh(lowerGeo, carBodyMaterial);
-      lower.position.set(0, 0.5, 0);
-      lower.castShadow = true;
-      bodyMeshGroup.add(lower);
-
-      // Long Touring Wagon Roof
-      const roofGeo = new THREE.BoxGeometry(1.42, 0.56, 2.8);
-      const roof = new THREE.Mesh(roofGeo, carBodyMaterial);
-      roof.position.set(0, 0.88, -0.3);
-      roof.castShadow = true;
-      bodyMeshGroup.add(roof);
-
-      // Roof Rails
-      const railGeo = new THREE.BoxGeometry(0.04, 0.04, 2.6);
-      const rLeft = new THREE.Mesh(railGeo, darkMat);
-      rLeft.position.set(-0.68, 1.18, -0.3);
-      bodyMeshGroup.add(rLeft);
-
-      const rRight = new THREE.Mesh(railGeo, darkMat);
-      rRight.position.set(0.68, 1.18, -0.3);
-      bodyMeshGroup.add(rRight);
-
-      // Vertical Frameless M-Twin Kidney Grille
-      const gMat = new THREE.MeshBasicMaterial({ color: 0x0a0c10 });
-      const kLeft = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.38, 0.08), gMat);
-      kLeft.position.set(-0.16, 0.42, 2.22);
-      bodyMeshGroup.add(kLeft);
-
-      const kRight = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.38, 0.08), gMat);
-      kRight.position.set(0.16, 0.42, 2.22);
-      bodyMeshGroup.add(kRight);
-
-      // L-Shaped Laser Headlights
-      const laserMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-      const hlL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.1), laserMat);
-      hlL.position.set(-0.65, 0.58, 2.2);
-      bodyMeshGroup.add(hlL);
-
-      const hlR = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.1), laserMat);
-      hlR.position.set(0.65, 0.58, 2.2);
-      bodyMeshGroup.add(hlR);
-
-      // Quad Round M-Exhaust Tips
-      const exMat = chromeMat;
-      [-0.45, -0.3, 0.3, 0.45].forEach((xPos) => {
-        const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.15, 16), exMat);
-        tip.position.set(xPos, 0.26, -2.25);
-        tip.rotation.x = Math.PI / 2;
-        bodyMeshGroup.add(tip);
-      });
-    }
-
-    // ================= MODEL 3: TOYOTA GR SUPRA (A91) =================
-    else if (selectedCarModelId === "toyota-supra-a91") {
-      // Low Slung Sculpted Coupe Body
-      const lowerGeo = new THREE.BoxGeometry(1.8, 0.44, 4.1);
-      const lower = new THREE.Mesh(lowerGeo, carBodyMaterial);
-      lower.position.set(0, 0.46, 0);
-      lower.castShadow = true;
-      bodyMeshGroup.add(lower);
-
-      // Long Sleek Hood with Center Nose Tip
-      const noseGeo = new THREE.BoxGeometry(1.72, 0.32, 1.6);
-      const nose = new THREE.Mesh(noseGeo, carBodyMaterial);
-      nose.position.set(0, 0.44, 1.6);
-      nose.rotation.x = 0.06;
-      bodyMeshGroup.add(nose);
-
-      // Double-Bubble Aerodynamic Roof
-      const roofL = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 1.6, 16), carBodyMaterial);
-      roofL.position.set(-0.35, 0.88, -0.2);
-      roofL.rotation.x = Math.PI / 2;
-      bodyMeshGroup.add(roofL);
-
-      const roofR = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 1.6, 16), carBodyMaterial);
-      roofR.position.set(0.35, 0.88, -0.2);
-      roofR.rotation.x = Math.PI / 2;
-      bodyMeshGroup.add(roofR);
-
-      // Integrated Ducktail Rear Lip
-      const dtGeo = new THREE.BoxGeometry(1.45, 0.12, 0.25);
-      const dt = new THREE.Mesh(dtGeo, carBodyMaterial);
-      dt.position.set(0, 0.72, -1.95);
-      dt.rotation.x = -0.2;
-      bodyMeshGroup.add(dt);
-
-      // 6-Lens LED Headlamps
-      const hlMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const hlL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.2), hlMat);
-      hlL.position.set(-0.62, 0.5, 2.2);
-      bodyMeshGroup.add(hlL);
-
-      const hlR = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.2), hlMat);
-      hlR.position.set(0.62, 0.5, 2.2);
-      bodyMeshGroup.add(hlR);
-
-      // Formula 1 Center Rear Fog Lamp
-      const f1Light = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.06), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
-      f1Light.position.set(0, 0.24, -2.12);
-      bodyMeshGroup.add(f1Light);
-    }
-
-    // ================= 4 MODULAR WHEELS (VELG & BAN) =================
-    const wheelPositions = [
-      { x: -0.98, y: 0.38, z: 1.35, isLeft: true },
-      { x: 0.98, y: 0.38, z: 1.35, isLeft: false },
-      { x: -0.98, y: 0.4, z: -1.35, isLeft: true },
-      { x: 0.98, y: 0.4, z: -1.35, isLeft: false },
-    ];
-
-    const rimColor = new THREE.Color(equippedVelg.colorTheme.primary);
-    const rimMat = new THREE.MeshStandardMaterial({
-      color: rimColor,
-      metalness: 0.92,
-      roughness: 0.2,
-    });
-    const tireMat = new THREE.MeshStandardMaterial({
-      color: 0x16171a,
-      roughness: 0.85,
-      metalness: 0.1,
-    });
-    const rotorMat = new THREE.MeshStandardMaterial({
-      color: 0x6b7280,
-      metalness: 0.95,
-      roughness: 0.2,
-    });
-
-    const caliperColorHex = equippedBrake.colorTheme.primary || "#eab308";
-    const caliperMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(caliperColorHex),
-      metalness: 0.6,
-      roughness: 0.3,
-    });
-
-    wheelPositions.forEach((pos) => {
-      const wheelSub = new THREE.Group();
-      wheelSub.position.set(pos.x, pos.y, pos.z);
-
-      // Tire Torus
-      const tireTorus = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.12, 20, 36), tireMat);
-      tireTorus.rotation.y = Math.PI / 2;
-      tireTorus.castShadow = true;
-      wheelSub.add(tireTorus);
-
-      if (equippedVelg.id === "enkei-rpf1") {
-        // High detail Enkei RPF1 Model
-        const rpf1Mesh = buildEnkeiRPF1Mesh({
-          scale: 0.28,
-          color: equippedVelg.colorTheme.primary || 0xdbe2ea,
-          secondaryColor: equippedVelg.colorTheme.secondary,
-          widthDepth: 0.38,
-        });
-        // Orient wheel outward towards vehicle side
-        rpf1Mesh.rotation.y = pos.isLeft ? -Math.PI / 2 : Math.PI / 2;
-        wheelSub.add(rpf1Mesh);
-      } else {
-        // Fallback procedural rim
-        const rimBarrel = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.34, 0.34, 0.24, 32, 1, true),
-          rimMat
-        );
-        rimBarrel.rotation.z = Math.PI / 2;
-        wheelSub.add(rimBarrel);
-
-        const rimHub = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.25, 24), rimMat);
-        rimHub.rotation.z = Math.PI / 2;
-        wheelSub.add(rimHub);
-
-        const spokeCount =
-          equippedVelg.id === "volk-te37"
-            ? 6
-            : equippedVelg.id === "bbs-lm-r"
-            ? 16
-            : 10;
-
-        for (let s = 0; s < spokeCount; s++) {
-          const ang = (s * Math.PI * 2) / spokeCount;
-          const spokeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.02), rimMat);
-          spokeMesh.position.set(
-            0.06 * (pos.isLeft ? -1 : 1),
-            Math.sin(ang) * 0.2,
-            Math.cos(ang) * 0.2
-          );
-          spokeMesh.rotation.x = ang;
-          wheelSub.add(spokeMesh);
-        }
-      }
-
-      // Brake Rotor & Caliper
-      const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 28), rotorMat);
-      rotor.rotation.z = Math.PI / 2;
-      wheelSub.add(rotor);
-
-      const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.08), caliperMat);
-      caliper.position.set(0, 0.16, 0.05);
-      wheelSub.add(caliper);
-
-      wheelsGroup.add(wheelSub);
-    });
-
-    // ================= MODULAR SPOILER / GT WING =================
-    if (equippedSpoiler.category !== "STOCK") {
-      const wingBlade = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.04, 0.35), carbonMat);
-      wingBlade.position.set(0, 1.22, -1.9);
-      wingBlade.rotation.x = -0.08;
-      wingBlade.castShadow = true;
-      spoilerGroup.add(wingBlade);
-
-      const endplateGeo = new THREE.BoxGeometry(0.02, 0.24, 0.38);
-      const epLeft = new THREE.Mesh(endplateGeo, carbonMat);
-      epLeft.position.set(-0.9, 1.22, -1.9);
-      spoilerGroup.add(epLeft);
-
-      const epRight = new THREE.Mesh(endplateGeo, carbonMat);
-      epRight.position.set(0.9, 1.22, -1.9);
-      spoilerGroup.add(epRight);
-
-      const stLeft = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.08), darkMat);
-      stLeft.position.set(-0.45, 0.98, -1.82);
-      stLeft.rotation.x = 0.2;
-      spoilerGroup.add(stLeft);
-
-      const stRight = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.08), darkMat);
-      stRight.position.set(0.45, 0.98, -1.82);
-      stRight.rotation.x = 0.2;
-      spoilerGroup.add(stRight);
-    }
-
-    // ================= MODULAR HOOD VENTS =================
-    if (equippedHood.category.includes("CARBON")) {
-      const ventGeo = new THREE.BoxGeometry(0.4, 0.04, 0.6);
-      const vLeft = new THREE.Mesh(ventGeo, carbonMat);
-      vLeft.position.set(-0.42, 0.64, 1.6);
-      vLeft.rotation.x = 0.08;
-      hoodGroup.add(vLeft);
-
-      const vRight = new THREE.Mesh(ventGeo, carbonMat);
-      vRight.position.set(0.42, 0.64, 1.6);
-      vRight.rotation.x = 0.08;
-      hoodGroup.add(vRight);
-    }
+    };
   }, [
     selectedCarModelId,
     equippedVelg,
     equippedTyre,
-    equippedSpoiler,
-    equippedHood,
-    equippedBodykit,
     equippedBrake,
     customModelFile,
   ]);
 
-  // Load Custom 3D Model (.glb, .gltf, .fbx)
+  // Load Custom User Uploaded 3D Model (.glb, .gltf, .fbx)
   useEffect(() => {
     if (!threeRef.current || !customModelFile) return;
-    const { customModelGroup, carBodyMaterial } = threeRef.current;
+    const { customModelGroup, glbModelGroup, carBodyMaterial } = threeRef.current;
     customModelGroup.clear();
+    glbModelGroup.clear();
 
     const fileUrl = URL.createObjectURL(customModelFile.file);
 
@@ -823,7 +832,7 @@ export default function Showroom3DCanvas({
   };
 
   return (
-    <div className="relative w-full h-[480px] sm:h-[560px] xl:h-[620px] rounded-2xl bg-[#06070a] border border-white/[0.08] overflow-hidden shadow-2xl flex items-center justify-center select-none">
+    <div className="relative w-full h-[480px] sm:h-[560px] xl:h-[620px] rounded-2xl bg-[#05060a] border border-white/[0.08] overflow-hidden shadow-2xl flex items-center justify-center select-none">
       {/* 3D WebGL Canvas */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
@@ -835,11 +844,10 @@ export default function Showroom3DCanvas({
             <button
               key={car.id}
               onClick={() => onSelectCarModel(car.id)}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                isSelected
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${isSelected
                   ? "bg-[#253046] text-[#9cbbf8] border border-[#9cbbf8]/40 font-bold shadow-[0_0_12px_rgba(156,187,248,0.2)]"
                   : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
-              }`}
+                }`}
             >
               <Car className="w-3.5 h-3.5" />
               <span>{car.name}</span>
@@ -941,11 +949,10 @@ export default function Showroom3DCanvas({
                   <button
                     key={finishMode}
                     onClick={() => handleFinishChange(finishMode)}
-                    className={`py-1 text-[10px] rounded transition-all font-bold ${
-                      isActive
+                    className={`py-1 text-[10px] rounded transition-all font-bold ${isActive
                         ? "bg-[#9cbbf8] text-black shadow-[0_0_8px_rgba(156,187,248,0.4)]"
                         : "bg-white/[0.05] text-neutral-400 hover:text-white hover:bg-white/10"
-                    }`}
+                      }`}
                   >
                     {finishMode}
                   </button>
@@ -964,13 +971,15 @@ export default function Showroom3DCanvas({
                   return (
                     <button
                       key={col.name}
-                      onClick={() => setPaintColor(col)}
+                      onClick={() => {
+                        setInternalPaintColor(col);
+                        onPaintColorChange?.(col);
+                      }}
                       title={`${col.name} (${col.finish})`}
-                      className={`h-6 rounded-md transition-all flex items-center justify-center border text-[9px] font-bold truncate px-1 ${
-                        isSelected
+                      className={`h-6 rounded-md transition-all flex items-center justify-center border text-[9px] font-bold truncate px-1 ${isSelected
                           ? "border-[#9cbbf8] scale-105 shadow-[0_0_8px_rgba(156,187,248,0.4)]"
                           : "border-white/10 hover:border-white/40 opacity-80 hover:opacity-100"
-                      }`}
+                        }`}
                       style={{
                         backgroundColor: col.hex,
                         color: ["#f0f2f5", "#facc15"].includes(col.hex) ? "#000" : "#fff",
@@ -986,6 +995,24 @@ export default function Showroom3DCanvas({
         </div>
       </div>
 
+      {/* Loading GLB Overlay Spinner */}
+      {isLoadingModel && (
+        <div className="absolute inset-0 bg-[#05060a]/80 backdrop-blur-md flex flex-col items-center justify-center z-30 font-mono">
+          <div className="relative flex items-center justify-center">
+            <Loader2 className="w-10 h-10 text-[#9cbbf8] animate-spin" />
+            <span className="absolute text-[10px] font-bold text-white">
+              {loadProgress > 0 ? `${loadProgress}%` : "3D"}
+            </span>
+          </div>
+          <p className="text-xs font-bold text-white uppercase tracking-widest mt-3">
+            LOADING 3D GLB CAR MODEL...
+          </p>
+          <p className="text-[11px] text-neutral-400 mt-0.5">
+            INITIALIZING SHOWROOM STUDIO SHADERS
+          </p>
+        </div>
+      )}
+
       {/* Floating Bottom Left Camera View Presets */}
       <div className="absolute bottom-4 left-4 flex items-center gap-1.5 bg-[#0d0f15]/80 border border-white/10 rounded-lg p-1 backdrop-blur-md font-mono text-[10px] z-10">
         {["3/4 Front", "Side Profile", "Rear Aero", "Wheel Zoom"].map((preset) => {
@@ -994,11 +1021,10 @@ export default function Showroom3DCanvas({
             <button
               key={preset}
               onClick={() => setCameraView(preset)}
-              className={`px-2 py-1 rounded transition-colors ${
-                isActive
+              className={`px-2 py-1 rounded transition-colors ${isActive
                   ? "bg-[#9cbbf8] text-black font-bold"
                   : "text-neutral-400 hover:text-white hover:bg-white/10"
-              }`}
+                }`}
             >
               {preset}
             </button>
@@ -1010,11 +1036,10 @@ export default function Showroom3DCanvas({
       <div className="absolute bottom-4 right-4 flex items-center gap-2 z-10">
         <button
           onClick={() => setIsRotating((prev) => !prev)}
-          className={`px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all backdrop-blur-md flex items-center gap-1.5 ${
-            isRotating
+          className={`px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all backdrop-blur-md flex items-center gap-1.5 ${isRotating
               ? "bg-[#9cbbf8] text-black border-[#9cbbf8] shadow-[0_0_12px_rgba(156,187,248,0.4)]"
               : "bg-[#0d0f15]/80 text-neutral-300 border-white/10 hover:text-white hover:bg-black/90"
-          }`}
+            }`}
         >
           <Rotate3d className="w-4 h-4" />
           <span>{isRotating ? "ROTATING" : "AUTO ROTATE"}</span>

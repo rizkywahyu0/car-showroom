@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Check, Sparkles, SlidersHorizontal, Layers } from "lucide-react";
+import { Check, Layers } from "lucide-react";
 import { ALL_INVENTORY_ITEMS, InventoryItem } from "@/app/inventory/data/wheels";
 import WheelImage from "@/app/inventory/components/WheelImage";
 

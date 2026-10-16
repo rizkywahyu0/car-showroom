@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Modal, message, Upload, Progress } from "antd";
+import { Modal, message } from "antd";
 import {
   UploadCloud,
   FileBox,
   CheckCircle2,
-  AlertCircle,
   HelpCircle,
   Sliders,
 } from "lucide-react";

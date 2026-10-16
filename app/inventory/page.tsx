@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import {
     ArrowRightLeft,
@@ -35,7 +35,6 @@ export default function InventoryPage() {
         brake: "brembo-gtr-billet",
     });
     const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
-    const [searchQuery, setSearchQuery] = useState<string>("");
 
     // Modals for support, diagnostics, checkout
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState<boolean>(false);
@@ -67,11 +66,7 @@ export default function InventoryPage() {
     const filteredItems = currentCategoryItems.filter((item) => {
         const matchFilter = selectedFilter === "ALL" || item.category === selectedFilter;
         const matchSize = selectedSize === "ALL" || item.size.includes(selectedSize);
-        const matchSearch =
-            searchQuery === "" ||
-            item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.brand.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchFilter && matchSize && matchSearch;
+        return matchFilter && matchSize;
     });
 
     const handleEquip = (item: InventoryItem) => {
@@ -273,7 +268,7 @@ export default function InventoryPage() {
                         </div>
                         <div className="flex justify-between py-2 border-b border-white/[0.05]">
                             <span className="text-neutral-400">Specification</span>
-                            <span className="text-white font-bold">{selectedItem.material} // {selectedItem.specs.spec1Value}</span>
+                            <span className="text-white font-bold">{selectedItem.material}{" • "}{selectedItem.specs.spec1Value}</span>
                         </div>
                         <div className="flex justify-between py-2 border-b border-white/[0.05]">
                             <span className="text-neutral-400">Unit Price</span>

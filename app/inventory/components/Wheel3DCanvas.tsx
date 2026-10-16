@@ -13,6 +13,11 @@ interface Wheel3DCanvasProps {
 export default function Wheel3DCanvas({ wheel }: Wheel3DCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRotating, setIsRotating] = useState(true);
+  const isRotatingRef = useRef(isRotating);
+
+  useEffect(() => {
+    isRotatingRef.current = isRotating;
+  }, [isRotating]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -213,7 +218,7 @@ export default function Wheel3DCanvas({ wheel }: Wheel3DCanvasProps) {
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
-      if (isRotating && !isDragging) {
+      if (isRotatingRef.current && !isDragging) {
         wheelGroup.rotation.y += 0.008;
       }
 
@@ -242,9 +247,22 @@ export default function Wheel3DCanvas({ wheel }: Wheel3DCanvasProps) {
       container.removeEventListener("touchstart", onPointerDown);
       window.removeEventListener("touchmove", onPointerMove);
       window.removeEventListener("touchend", onPointerUp);
+
+      scene.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          mesh.geometry?.dispose();
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => m.dispose());
+          } else {
+            mesh.material?.dispose();
+          }
+        }
+      });
+
       renderer.dispose();
     };
-  }, [wheel, isRotating]);
+  }, [wheel]);
 
   return (
     <div className="relative w-full h-full min-h-[280px] sm:min-h-[340px] flex items-center justify-center cursor-grab active:cursor-grabbing">

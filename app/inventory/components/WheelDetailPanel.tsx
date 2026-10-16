@@ -139,8 +139,8 @@ export default function WheelDetailPanel({
         </div>
       </div>
 
-      {/* Action Button: EQUIP TO BUILD */}
-      <div className="mt-6 pt-2">
+      {/* Action Buttons: EQUIP TO BUILD & COMPARE */}
+      <div className="mt-6 pt-2 space-y-2">
         <button
           onClick={() => onEquip(wheel)}
           className={`w-full py-3 sm:py-3.5 px-4 rounded-lg font-mono font-bold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-lg ${
@@ -161,6 +161,15 @@ export default function WheelDetailPanel({
             </>
           )}
         </button>
+
+        {onCompare && (
+          <button
+            onClick={onCompare}
+            className="w-full py-2 px-3 rounded-lg font-mono text-[11px] text-neutral-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition-colors uppercase tracking-wider"
+          >
+            COMPARE WITH ALTERNATIVE
+          </button>
+        )}
       </div>
     </aside>
   );

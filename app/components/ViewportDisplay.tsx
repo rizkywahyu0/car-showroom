@@ -2,6 +2,8 @@
 
 import React from "react";
 
+import Image from "next/image";
+
 export interface CameraAngle {
   label: string;
   img: string;
@@ -36,10 +38,14 @@ export default function ViewportDisplay({
       {/* Viewport Frame Container */}
       <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] max-h-[480px] xl:max-h-[540px] rounded-sm overflow-hidden bg-[#0a0c10] border border-white/[0.12] shadow-[0_20px_60px_rgba(0,0,0,0.85)] group">
         {/* Active Supercar Render Image */}
-        <img
+        <Image
           src={currentAngle.img}
           alt="Shift Tech Vehicle"
-          className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-[1.02] filter contrast-[1.08] brightness-[0.94]"
+          fill
+          unoptimized
+          priority
+          sizes="(max-width: 1200px) 100vw, 50vw"
+          className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.02] filter contrast-[1.08] brightness-[0.94]"
         />
 
         {/* High-tech HUD Scanlines & Subtle Vignette */}

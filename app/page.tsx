@@ -1,10 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Navbar from "./components/Navbar";
 import HeroHeadline from "./components/HeroHeadline";
 import ViewportDisplay, { CameraAngle } from "./components/ViewportDisplay";
-import TabContent from "./components/TabContent";
 
 const CAMERA_ANGLES: Record<string, CameraAngle> = {
   CAM_01_GARAGE_INT: {
@@ -25,28 +23,21 @@ const CAMERA_ANGLES: Record<string, CameraAngle> = {
 };
 
 export default function ShiftTechLandingPage() {
-  const [activeTab, setActiveTab] = useState<"Visualizer" | "Workshop" | "Inventory" | "Stats">("Visualizer");
   const [activeCam, setActiveCam] = useState<string>("CAM_01_GARAGE_INT");
   const [aeroLoad, setAeroLoad] = useState<number>(142);
   const [temp, setTemp] = useState<number>(24);
   const [isConfiguring, setIsConfiguring] = useState<boolean>(false);
   const [selectedColor, setSelectedColor] = useState<string>("Stealth Obsidian");
-  const [isSaved, setIsSaved] = useState<boolean>(false);
   const [spoilerAngle, setSpoilerAngle] = useState<number>(12);
 
   // Micro telemetry fluctuation for live realism
   useEffect(() => {
     const interval = setInterval(() => {
-      setAeroLoad((prev) => 140 + Math.floor(Math.random() * 6));
-      setTemp((prev) => 24 + Number((Math.random() * 0.4 - 0.2).toFixed(1)));
+      setAeroLoad(140 + Math.floor(Math.random() * 6));
+      setTemp(24 + Number((Math.random() * 0.4 - 0.2).toFixed(1)));
     }, 2500);
     return () => clearInterval(interval);
   }, []);
-
-  const handleSaveBuild = () => {
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2500);
-  };
 
   const handleNextGalleryCam = () => {
     const camKeys = Object.keys(CAMERA_ANGLES);
@@ -75,39 +66,32 @@ export default function ShiftTechLandingPage() {
 
       {/* 2. MAIN VIEWPORT / CONTENT SECTION (OPTIMIZED FOR LAPTOPS) */}
       <main className="relative z-10 max-w-[1536px] w-full mx-auto px-4 sm:px-8 xl:px-12 py-6 sm:py-10 xl:py-16 flex-1 flex items-center">
-        {activeTab === "Visualizer" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-16 items-center w-full">
-            {/* Left Hero & Headline */}
-            <div className="lg:col-span-5 flex justify-center lg:justify-start">
-              <HeroHeadline
-                isConfiguring={isConfiguring}
-                setIsConfiguring={setIsConfiguring}
-                onGalleryNext={handleNextGalleryCam}
-                selectedColor={selectedColor}
-                setSelectedColor={setSelectedColor}
-                spoilerAngle={spoilerAngle}
-                setSpoilerAngle={setSpoilerAngle}
-                setAeroLoad={setAeroLoad}
-              />
-            </div>
-
-            {/* Right Supercar Viewport HUD */}
-            <div className="lg:col-span-7 flex justify-center">
-              <ViewportDisplay
-                activeCam={activeCam}
-                setActiveCam={setActiveCam}
-                cameraAngles={CAMERA_ANGLES}
-                aeroLoad={aeroLoad}
-                temp={temp}
-              />
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-16 items-center w-full">
+          {/* Left Hero & Headline */}
+          <div className="lg:col-span-5 flex justify-center lg:justify-start">
+            <HeroHeadline
+              isConfiguring={isConfiguring}
+              setIsConfiguring={setIsConfiguring}
+              onGalleryNext={handleNextGalleryCam}
+              selectedColor={selectedColor}
+              setSelectedColor={setSelectedColor}
+              spoilerAngle={spoilerAngle}
+              setSpoilerAngle={setSpoilerAngle}
+              setAeroLoad={setAeroLoad}
+            />
           </div>
-        ) : (
-          <TabContent
-            activeTab={activeTab}
-            onBackToVisualizer={() => setActiveTab("Visualizer")}
-          />
-        )}
+
+          {/* Right Supercar Viewport HUD */}
+          <div className="lg:col-span-7 flex justify-center">
+            <ViewportDisplay
+              activeCam={activeCam}
+              setActiveCam={setActiveCam}
+              cameraAngles={CAMERA_ANGLES}
+              aeroLoad={aeroLoad}
+              temp={temp}
+            />
+          </div>
+        </div>
       </main>
 
       {/* FOOTER SYSTEM STATUS INDICATOR */}

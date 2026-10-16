@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { X, ArrowRightLeft } from "lucide-react";
 import { ALL_INVENTORY_ITEMS, InventoryItem } from "../data/wheels";
 import WheelImage from "./WheelImage";
@@ -19,16 +19,13 @@ export default function CompareModal({
   onSelectWheel,
 }: CompareModalProps) {
   const categoryItems = ALL_INVENTORY_ITEMS.filter((i) => i.type === currentWheel.type);
+  const [selectedAltId, setSelectedAltId] = useState<string | null>(null);
 
-  const [compareItem, setCompareItem] = useState<InventoryItem>(
-    categoryItems.find((w) => w.id !== currentWheel.id) || categoryItems[0] || currentWheel
-  );
-
-  useEffect(() => {
-    const defaultAlt =
-      categoryItems.find((w) => w.id !== currentWheel.id) || categoryItems[0] || currentWheel;
-    setCompareItem(defaultAlt);
-  }, [currentWheel]);
+  const defaultAlt =
+    categoryItems.find((w) => w.id !== currentWheel.id) || categoryItems[0] || currentWheel;
+  const compareItem =
+    (selectedAltId && categoryItems.find((w) => w.id === selectedAltId && w.id !== currentWheel.id)) ||
+    defaultAlt;
 
   if (!isOpen) return null;
 
@@ -129,7 +126,7 @@ export default function CompareModal({
                   value={compareItem.id}
                   onChange={(e) => {
                     const found = categoryItems.find((w) => w.id === e.target.value);
-                    if (found) setCompareItem(found);
+                    if (found) setSelectedAltId(found.id);
                   }}
                   className="appearance-none bg-[#181c26] text-white text-xs font-mono px-3 py-1 rounded border border-white/20 outline-none cursor-pointer"
                 >
