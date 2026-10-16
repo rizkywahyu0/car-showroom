@@ -13,7 +13,7 @@ model User {
   password           String
   image              String?
   role               String           @default("USER")
-  balance            Float            @default(500.0)
+  balance            Float            @default(0.0)
   subscriptionTier   String           @default("FREE")
   subscriptionStatus String           @default("ACTIVE")
   createdAt          DateTime         @default(now())

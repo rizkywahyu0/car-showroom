@@ -54,6 +54,7 @@ export async function POST(req: Request) {
         password: hashedPassword,
         image: image ? String(image).trim() : null,
         role: "USER",
+        balance: 0.0,
       },
       select: {
         id: true,
@@ -61,7 +62,11 @@ export async function POST(req: Request) {
         email: true,
         image: true,
         role: true,
+        balance: true,
+        subscriptionTier: true,
+        subscriptionStatus: true,
         createdAt: true,
+        updatedAt: true,
       },
     });
 
